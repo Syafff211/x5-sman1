@@ -20,37 +20,36 @@ export async function middleware(request: NextRequest) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-
   const path = request.nextUrl.pathname;
 
-  // Redirect unauthenticated users from protected routes
-  if (!user && (path.startsWith('/dashboard') || path.startsWith('/admin'))) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/auth/login';
-    return NextResponse.redirect(url);
+  // Public routes - no auth needed
+  const publicRoutes = ['/', '/auth/login', '/auth/admin', '/auth/forgot-password'];
+  const isPublicRoute = publicRoutes.some(route => path === route || path.startsWith('/_next') || path.includes('.'));
+
+  // Admin routes need auth
+  if (path.startsWith('/admin')) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/auth/admin';
+      return NextResponse.redirect(url);
+    }
   }
 
-  // Role-based redirect
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('user_id', user.id)
-      .single();
-
-    // Non-admin trying to access admin pages
-    if (path.startsWith('/admin') && profile?.role !== 'admin') {
+  // Dashboard routes need auth
+  if (path.startsWith('/dashboard')) {
+    if (!user) {
       const url = request.nextUrl.clone();
-      url.pathname = '/dashboard';
+      url.pathname = '/auth/login';
       return NextResponse.redirect(url);
     }
+  }
 
-    // Redirect authenticated users away from auth pages
-    if (path.startsWith('/auth/login') || path.startsWith('/auth/forgot-password')) {
-      const url = request.nextUrl.clone();
-      url.pathname = profile?.role === 'admin' ? '/admin' : '/dashboard';
-      return NextResponse.redirect(url);
-    }
+  // Redirect authenticated users away from login pages
+  if (user && (path === '/auth/login' || path === '/auth/admin')) {
+    const url = request.nextUrl.clone();
+    // Let them go where they want - admin login goes to admin, student login goes to dashboard
+    url.pathname = path === '/auth/admin' ? '/admin' : '/dashboard';
+    return NextResponse.redirect(url);
   }
 
   return supabaseResponse;
