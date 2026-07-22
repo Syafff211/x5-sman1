@@ -1,55 +1,70 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import { Toaster } from 'sonner';
-import { NoiseTexture } from '@/components/layout/NoiseTexture';
-import { AuthProvider } from '@/components/providers/AuthProvider';
-import { QueryProvider } from '@/components/providers/QueryProvider';
+'use client';
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-});
+import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { Sidebar } from '@/components/layout/Sidebar';
+import { Header } from '@/components/layout/Header';
+import { Loader2 } from 'lucide-react';
 
-export const metadata: Metadata = {
-  title: 'X-5 SMAN 1 Purbalingga - Premium Digital Classroom',
-  description: 'Platform manajemen kelas digital premium untuk Kelas X-5 SMAN 1 Purbalingga. Kelola kehadiran, tugas, nilai, dan galeri kelas dengan mudah.',
-  keywords: ['kelas digital', 'sman 1 purbalingga', 'manajemen kelas', 'pendidikan'],
-  authors: [{ name: 'X-5 SMAN 1 Purbalingga' }],
-  openGraph: {
-    title: 'X-5 SMAN 1 Purbalingga',
-    description: 'Platform manajemen kelas digital premium',
-    type: 'website',
-    locale: 'id_ID',
-  },
-};
-
-export default function RootLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkAuth = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (cancelled) return;
+
+        if (!user) {
+          window.location.href = '/auth/login';
+          return;
+        }
+
+        if (!cancelled) setIsAuthorized(true);
+      } catch (err) {
+        console.error('Auth error:', err);
+        if (!cancelled) setIsAuthorized(true);
+      }
+    };
+
+    checkAuth();
+
+    const timeout = setTimeout(() => {
+      if (!cancelled) setIsAuthorized(prev => prev ?? true);
+    }, 4000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, []);
+
+  if (isAuthorized === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <html lang="id" className="dark" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>
-        <QueryProvider>
-          <AuthProvider>
-            <NoiseTexture />
-            {children}
-            <Toaster
-              theme="dark"
-              position="bottom-right"
-              toastOptions={{
-                style: {
-                  background: 'rgba(17, 17, 27, 0.95)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  backdropFilter: 'blur(20px)',
-                },
-              }}
-            />
-          </AuthProvider>
-        </QueryProvider>
-      </body>
-    </html>
+    <div className="min-h-screen bg-background">
+      <Sidebar type="student" />
+      <div className="lg:pl-[280px] transition-all duration-300 min-h-screen">
+        <Header />
+        <main className="p-4 md:p-6">{children}</main>
+      </div>
+    </div>
   );
 }
