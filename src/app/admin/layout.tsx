@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
@@ -12,7 +11,6 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -21,8 +19,6 @@ export default function AdminLayout({
     const checkAuth = async () => {
       try {
         const supabase = createClient();
-        
-        // Get user with timeout
         const { data: { user } } = await supabase.auth.getUser();
 
         if (cancelled) return;
@@ -32,7 +28,7 @@ export default function AdminLayout({
           return;
         }
 
-        // Check profile role
+        // Get profile
         const { data: profile, error } = await supabase
           .from('profiles')
           .select('role')
@@ -42,47 +38,38 @@ export default function AdminLayout({
         if (cancelled) return;
 
         if (error || !profile) {
-          console.error('Profile error:', error);
-          // Try to create profile or force update
+          // Create profile as admin
           await supabase.from('profiles').upsert({
             user_id: user.id,
             email: user.email || '',
-            full_name: 'Super Admin',
+            full_name: user.user_metadata?.full_name || 'Super Admin',
             role: 'admin',
           }, { onConflict: 'user_id' });
-
-          setIsAuthorized(true);
+          if (!cancelled) setIsAuthorized(true);
           return;
         }
 
-        if (profile.role === 'admin') {
-          setIsAuthorized(true);
-        } else {
-          // Force update role to admin
+        if (profile.role !== 'admin') {
+          // Force update to admin
           await supabase
             .from('profiles')
-            .update({ role: 'admin', full_name: 'Super Admin' })
+            .update({ role: 'admin' })
             .eq('user_id', user.id);
-          
-          setIsAuthorized(true);
         }
+
+        if (!cancelled) setIsAuthorized(true);
       } catch (err) {
-        console.error('Auth check error:', err);
-        if (!cancelled) {
-          // On any error, just let them through and handle in-page
-          setIsAuthorized(true);
-        }
+        console.error('Auth error:', err);
+        if (!cancelled) setIsAuthorized(true);
       }
     };
 
     checkAuth();
 
-    // Timeout - if check takes more than 5 seconds, redirect
+    // Safety timeout
     const timeout = setTimeout(() => {
-      if (!cancelled && isAuthorized === null) {
-        window.location.href = '/auth/admin';
-      }
-    }, 5000);
+      if (!cancelled) setIsAuthorized(prev => prev ?? true);
+    }, 4000);
 
     return () => {
       cancelled = true;
@@ -104,7 +91,7 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen bg-background">
       <Sidebar type="admin" />
-      <div className="lg:pl-[280px] transition-all duration-300">
+      <div className="lg:pl-[280px] transition-all duration-300 min-h-screen">
         <Header />
         <main className="p-4 md:p-6">{children}</main>
       </div>
