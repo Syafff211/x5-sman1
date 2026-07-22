@@ -23,7 +23,7 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-export default function LoginPage() {
+export default function StudentLoginPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -39,6 +39,7 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       const supabase = createClient();
+      
       const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
@@ -47,20 +48,19 @@ export default function LoginPage() {
       if (error) throw error;
 
       if (authData.user) {
-        const { data: profile } = await supabase
+        // Force set role ke student
+        await supabase
           .from('profiles')
-          .select('*')
-          .eq('user_id', authData.user.id)
-          .single();
+          .update({ role: 'student' })
+          .eq('user_id', authData.user.id);
 
-        if (profile?.role === 'admin') {
-          router.push('/admin');
-        } else {
-          router.push('/dashboard');
-        }
-        toast.success('Login berhasil!');
+        await supabase.auth.refreshSession();
+
+        toast.success('Login berhasil! Selamat datang.');
+        window.location.href = '/dashboard';
       }
     } catch (error: any) {
+      console.error('Login error:', error);
       toast.error(error.message || 'Login gagal. Periksa email dan password.');
     } finally {
       setIsLoading(false);
@@ -71,7 +71,6 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center p-6 relative">
       <ParticlesBackground />
       
-      {/* Gradient Orbs */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[128px]" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-[128px]" />
@@ -90,15 +89,15 @@ export default function LoginPage() {
                 <GraduationCap className="h-8 w-8 text-white" />
               </div>
             </div>
-            <CardTitle className="text-2xl">Selamat Datang</CardTitle>
+            <CardTitle className="text-2xl">Login Siswa</CardTitle>
             <CardDescription>
-              Masuk ke akun X-5 SMAN 1 Purbalingga
+              Masuk ke dashboard kelas X-5 SMAN 1 Purbalingga
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email / NISN</Label>
+                <Label htmlFor="email">Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -131,19 +130,6 @@ export default function LoginPage() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="rounded border-white/10" />
-                  <span className="text-sm text-muted-foreground">Ingat saya</span>
-                </label>
-                <Link
-                  href="/auth/forgot-password"
-                  className="text-sm text-primary hover:underline"
-                >
-                  Lupa password?
-                </Link>
-              </div>
-
               <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
                 {isLoading ? (
                   <>
@@ -151,13 +137,19 @@ export default function LoginPage() {
                     Memproses...
                   </>
                 ) : (
-                  'Masuk'
+                  <>
+                    <GraduationCap className="h-4 w-4 mr-2" />
+                    Masuk
+                  </>
                 )}
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
-              <Link href="/" className="text-sm text-muted-foreground hover:text-white">
+            <div className="mt-6 text-center space-y-2">
+              <Link href="/auth/forgot-password" className="text-sm text-primary hover:underline block">
+                Lupa password?
+              </Link>
+              <Link href="/" className="text-sm text-muted-foreground hover:text-white block">
                 ← Kembali ke halaman utama
               </Link>
             </div>
